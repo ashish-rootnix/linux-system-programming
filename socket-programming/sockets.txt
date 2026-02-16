@@ -1,0 +1,283 @@
+Client-server scenario, aplication communicate using sockets as follows:
+1) Each application creates a socket. A socket is apparatus that follows communication, and both application 
+requires one.
+2) The server binds its socket to well-known address so that clients can locate it.
+
+    fd = socket(domain, type, protocol);
+
+Communication domain:
+Sockets exists in a communication domain, which determines:
+1) The method of identifying a socket (format of socket is address)
+2) The range of communication (application on same host or two machines on network)
+
+Modern operating systems supports following domains:
+1) The UNIX (AF_UNIX) domain allows communicationbetween applicationon the same host.
+        Domain:                             AF_UNIX
+        Communication performed:            within Kernel
+        Communication between aplications:  On same host
+        Address format:                     pathname
+        Address structure:                  socketaddr_un
+2) The IPv4 (AF_INET) domain allows communication between applications running hosts connected via an Internet
+    Protocol version (IPv4)
+        Domain:                             AF_INET
+        Communication performed:            via IPv4
+        Communication between aplications:  On hosts connected on IPv4 network
+        Address format:                     32-bit IPv4 address + 16-bit port number
+        Address structure:                  socketaddr_in    
+3) The IPv6 (AF_INET6) domain allows communication between applications running on hosts connected via an 
+    Internet Protocol IPv6
+        Domain:                             AF_INET6
+        Communication performed:            via IPv6
+        Communication between aplications:  On hosts connected on IPv6 network
+        Address format:                     128-bit IPv6 address + 16-bit port number
+        Address structure:                  socketaddr_in6
+
+Socket Type:
+    Every socket implementation provides at least two types of sockets: stream and datagram.
+
+    Stream Socket Types:    Reliable delivery:              Y    
+    (SOCK_STREAM)           Message boundaries preserved:   N
+                            Connection-oriented:            Y
+
+    Datagram Socket Types:  Reliable delivery:              N    
+                            Message boundaries preserved:   Y
+                            Connection-oriented:            N
+
+Stream Sockets (SOCK_STREAM):
+    Reliable: Guranteed that either the transmitted data will arrive intact at the receiving appplication,
+    exactly as it was transmitted by the sender or that we'll receive notification of probable failure.
+    Bidirectional: Data may be transmited in either direction between two sockets.
+    Byte-stream means that, as ith pipes, there is no concept of message boundaries.
+    A stream socket is similar to using a pair of pipes o allow bidirectional communication between two
+    applications, with difference that sockets permits communication over a network.
+
+    Streram sockets are described in connection-oriented. 
+
+Datagram Sockets (SOCK_DGRAM):
+    Data to be exchanged in the form of messages called datagrams. With datagram message boundaries are
+    preserved but data transmission is not reliable. 
+    Datagram sockets are connectionless socket. 
+
+In the Internet Domain, datagram sockets employ the User Datagram Protocol (UDP), and stram sockets (usually)
+employs Transmission Control Protocol (TCP).
+
+
+Socket system calls:
+    socket() -> creates a new socket
+    bind()  -> binds a socket to an address. Usually, a server employs this call to bind its socket to a well-
+    known address so that clients can locate the socket.
+    listen() -> Stram socket to accept incoming connection from other sockets
+    accept() -> accepts a connection from peer applicationon a listening stram socket and optionally returns
+    address of peer socket.
+    connect() -> Establish a connection with another socket
+
+Creating a Socket: socket()
+    #include <sys/socket.h>
+    int socket(int domain, int type, int protocol);
+            // Returns file descriptor on success, or -1 on error
+    
+Binding a socket to an address: bind()
+    #include <sys/socket.h>
+    int bind(int sockfd, const struct sockaddr *addr, socklen_t addlen);
+            // Returns 0 on success, or -1 on error
+    
+    File descriptor obtained from socket(), can be bound to address as *addr. 
+
+Generic socket address structure: strcut sockaddr
+    struct sockaddr{
+        sa_family_t sa_family;  /*Address family (AF_* constant)*/
+        char sa_data[14];       /*Socket address (size varies according to socket domain)*/
+    };
+
+
+Stream Sockets:
+______________
+1) The socket() system call, creates a socket. Two applicaitons to communicate, each one of them must 
+    create a socket.
+2) Communication via a stream socket is analogous to a telephone call.
+    One application must connect its socket to another application's socket before communication can
+    take place. Two sockets are connected as follows:
+    a) One application calls bind() in order to bind the socket to a well-known address, and then calls
+    listen() to notify the kernel of its willingness to accept incoming connection.
+    b) The other application establishes the connection by calling connect(), specifying the address of the
+    socket to which the connection is to be made. Analogous to dailing someone's telephone number.
+    c) The applcation that called listen() then accepts the connection using accept(). If the accept() is
+    performed before the peer applicaiton calles conenct(), then accept() blocks.
+3) Once connection has been established, data can be transmitted in both direction between the application
+    until one of the applciaiton closes the connection suing close()
+
+Active (client) and passive (server) sockets:
+    Socket that has been created using socket() is active. An active socket can be used in connect()
+    call to establish a connection to a passive socket. This is referred to as performing an active open.
+        The client that performs the active socket open.
+
+    Passive socket (listening socket) is one that has been marked to allow incoming connection by calling
+    listen().Accepting an incoming connection is referred to as performing a passive open.
+        The server that performs the passive socket open.
+
+    
+        Passive Socket (Server)
+         ----------    
+        | socket() |
+         ----------
+             |
+             V
+         ----------    
+        | bind() |
+         ----------
+             |
+             V        
+         ----------    
+        | listen() |
+         ----------
+             |
+             V      
+         ----------    
+        | accept() |                                    Active Socket (client)
+         ----------
+             |                                              ----------
+             |                                             | socket() |                                 
+             |                                              ----------
+             |                                                  |
+             |                                              ----------
+             |                                             | connect()|       
+             |                                              ----------
+             V                                                  |
+         ----------                                         ----------  
+        |  read()  | <------------------------------------ |  write() |                   
+         ----------                                         ----------
+             |                                                  |
+             V                                                  V
+         ----------                                         ----------                                               
+        | write()  | ------------------------------------> |  read()  |
+         ----------                                         ----------
+             |                                                  |
+             V                                                  V
+         ----------                                         ----------    
+        |  close() |                                       |  close() |
+         ----------                                         ---------- 
+
+*Listening for incoming connections: listen()*
+
+#include<sys/socket.h>
+int listen(int socketfd, int backlog);
+        // Return 0 on success, or -1 on error
+
+listen() call marks stream socket reffered to by fd socketfd as passive.
+Subsequently socket is used to accept connections from other (active sockets)
+
+We can't apply listen() to connected socket, which is a connecT() has been succesfully performed
+or socket returned by a call accept().
+
+Sometimes client calls connect() before server has called accpet(), so this is pending connection.
+backlog is used to indicate pending connections. 
+If pneding connection request subsequent accept() can be performed.The backlog argument allows us to limit
+number of such pending connections. Connection requests up to this limit succeed immediately.
+Further connections request are blocked until a pending connection is accepted, thus removed from pending
+connection queue.
+
+SOMAXCONN
+
+*Accpeting a connection: accept()*
+
+#include<sys/socket.h>
+int accept (int socketfd, struct socketaddr* addr, socklen_t *addrlen);
+        Returns file descriptor on success or -1 on error
+    
+accept() accepts an incoming connection on the listening stream socket referred to by the 
+file descriptor socketfd. 
+If there are no pending connections when accept() is called, the call is blocked until a connection requests
+
+Accept create new socket and it is this new socket that is connected to the peer socket that performed
+the connect().
+The listening socket remains open and can be used to accept further connection. A typical server application
+creates one listening socket, binds it to well-known address, and handles all client requests by accpeting
+connections via listening socket.
+
+socketaddr* addr -> points to structure that is used to return the socket address. structure deppends on 
+type of domain.
+addlen -> Points to integer that updated with size of buffer pointed to by addr.
+
+*Connecting to Peer socket: connect()*
+#include <sys/socket.h>
+int connect(int socketfd, const struct socketaddr *addr, socklen_t addrlen);
+        // Returns 0 on success, or -1 on error
+
+connect() call coonects the active socket referred by socketfd to listening socket whose address is specified
+by addr and addrlen.
+
+If connect() dails and we wish to reattempt the connection, then close this socket abd craete a new socketand reattempt the
+connection with new socket.
+
+*I/O on stram scoksets*
+To perfoem I/O, we use read() and write() system calls.
+A socket may be closed using close() or consequence of the applciation terminating. Afterword peer attempts to
+read from the other end of the connection, it receieves end-of-file.
+If other peer applciation attempts to write to its socket, it receives a SIGPIPE signal, system call fails,
+with the error EPIPE.
+Usual way is to ignore the SIGOPIPE signal to find out about closed connections via EPIPE error.
+
+Datagram Sockets:
+_________________
+
+   
+           Server
+         ----------    
+        | socket() |
+         ----------
+             |
+             V
+         ----------    
+        | bind() |
+         ----------
+             |
+             |                                               Client
+             |                                              ----------
+             |                                             | socket() |                                 
+             |                                              ----------
+             |                                                  |
+             |                                                  |
+             V                                                  V
+         ----------                                         ----------  
+        |recvfrom()| <------------------------------------ | sendto() |                   
+         ----------                                         ----------
+             |                                                  |
+             V                                                  V
+         ----------                                         ----------                                               
+        | sendto() | ------------------------------------> |recvfrom()|
+         ----------                                         ----------
+             |                                                  |
+             V                                                  V
+         ----------                                         ----------    
+        |  close() |                                       |  close() |
+         ----------                                         ---------- 
+
+socket() : Each application that wants to send or receive datagrams cteates a datagram socket using socket()
+
+bind() : bind the socket to well-known address. typically, server binds its socket to well-known address and
+a client initialtes communication by sending a datagramto that address.
+
+sendto() : It sends datagram by putting server acddress as parameter.
+
+recvfrom() : recvfrom allows us to obtain addreess of sender, we can reply as desired.
+
+In datagram, data packets may be transmitted succesfully of dropped or might sent multiple times. 
+Datagram is connectionless communication.
+
+#include<sys/socket.h>
+size_t recvfrom(int sockfd, void *buffer, size_t length, int flags, structaddr *addr, socklen_t *addrlen);
+    // Returns number of bytes received, 0 on EOF, -1 on error
+size_t sendto(int sockfd, void *buffer, size_t length, int flags, const struct structaddr *addr, socklen_t addrlen);
+    // Returns number of bytes sent, -1 on error
+
+Using connect() with datagram sockets:
+Even though datagram sockets are connnectionless, the connect() system call serves a purpose when applied to
+datagram sockes. 
+Connected datagram socket: Kernel recoed sockets when connect() is called
+Unconnected datagram socket
+
+After datagram socket has been connected:
+Datagram can be sent through the socket using write() and are automatically sent to same peer socket
+Only datagrams sent by peer socket may be read on the socket.
+
+When we connect sockets using connecT(), simpler I/O system calls can be used.
