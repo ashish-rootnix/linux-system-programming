@@ -1,0 +1,91 @@
+* The term operating system is commonly used with two different meaning.
+
+To denote entire package consisting of the central software managing a computer's resources and
+all of the acompanying standard software tools, such as command-line interpreters, graphical user
+interfaces, file utilitites, and editors.
+More narrowly, to refer to the central software that manages and allocates computer resources
+i.e CPU, RAM and devices
+
+The linux kernel executable typically resides at the pathname "/boot/vmlinuz"
+
+In UNIX implementation, the kernel was called unix, later UNIX implementation implemented virtual 
+memory, renamed kernel vmunix.
+On the linux, file name mirrors system name, with the z replacing the final x to z to signify
+that the kernel is a compressed executable.
+
+
+* Tasks performed by the kernel:
+1) Process Scheduling:
+Like UNIX systems, Linux is a 'preemptive multitasking' operating systems.
+Multitasking means that multiple processes can simultaneously resides in memory and each may receive
+use of CPUs.
+Preemptive means that the rules governing which processes receive use of the CPU and how long
+are determined by the kernel process scheduler.
+
+2) Memory Management:
+Physical memory (RAM) remains a limited resource that the kernel must share among preocesses
+in an equitable and efficient fashion.
+    - Processes are isolated from one another and from the kernel.so that one process can't read 
+    or modify the memory of another preocess or kernel.
+    - Only part of a preocess needs to be kept in memory, thereby lowering the memory requirements
+    of each preocess and allowing more processes to be held in RAM simultaneously.
+    This leads to better CPU utilization, there is at least one process that the CPUs can execute.
+ 
+3) Provision of file system:
+The kernel provides a file system on disk, allows files to be created, retrived, updated, deleted 
+and so on.
+
+4) Creation and termination of preocesses:
+The kernel can load a new program into memory, providing it with resources (CPU, memory, access to
+to files) that it needs in order to tun. Such an instance of a running program is termed as process.
+Kernel ensures resources it uses are freed for subsequent reuseby later program.
+
+5) Access to devices:
+The kernel provides programs with an interface that standardizes and simplifies access to devices,
+while at the same time arbitrating access by multiple processes to each device.
+
+6) Networking:
+The kernel transmits and receives network messages (packets) on behalf of user processes.
+Routing of network packets to the target systems.
+
+7) Provision of system call application programming interfaces (API):
+Processes can request the kernel to perform various tasks using kernel entry points knows as 
+system calls.
+
+8) Abstraction of virtual private computer:
+Multiuser operating sytems. Each user can log on to the system and operate largely independently
+of other users.
+
+* Kernel Mode and User Mode:
+Modern processor architectures typically allow the CPU to operate in at least two different modes:
+user mode and kernel mode.
+Hardware instructions allows switching from one mode to the other. 
+Areas of virtual memory can be marked as being part of user space or kernel space.
+When running in user mode, CPU can access only memory that is marked as being in user space; 
+attempts to access only memory that is marked as being in user space; attempts to access memory 
+in kernel mode, the CPU can access both user and kernel memory space.
+When running in kernel mode, the CPU can access both user and kernel memory space.
+
+* Process versus kernel views of the system
+Process-oriented way
+Kernel's point of view
+An executing process doesn't know when it will next time out, which other processes will then be
+scheduled for the CPU or when it will next time be scheduled.
+The delivery of signals and the occurance interprocess communication are mediated by the kernel,
+and can occur at any time by a process. 
+Process doesn't know where it is located in RAM or, in general whether particular part of its
+memory space is currently resident in memory or held in the swap area.
+Similarly, a process doesn't know where on the disk deive the files it accesses are being held.
+it simply referes files by the name. A process operates in isolation; it can't directly
+communicate directly with another process. A process can't create another process by itself.
+Finally process can't communicate directly with the input output devices attached to the computer.
+
+A running system has one kernel that knows and controls everything. 
+The kernel faciliates the running of all processes on the system. 
+Kernel maintains data structures containing information about all running processes and updates
+these structures as processes are created, change state and terminate. 
+Kernel maintains all low-level data structures that enables the filesnames used by programs to be 
+translated to virtual memory of each process into the physical memory of the computer and swap
+areas on disks.
+Kernel performs all direct communication with input and output deviesm transfering information to
+and from user processes as required.
