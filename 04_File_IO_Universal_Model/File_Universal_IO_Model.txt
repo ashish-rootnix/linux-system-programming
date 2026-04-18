@@ -1,0 +1,188 @@
+File Descriptor
+Universal I/O Model
+I/O Buffering
+
+File Descriptor: Non-negative integer.
+File descriptors are used to refer to all types of open files, including pipes, FIFOs, sockets,
+terminals, devices and regular files.
+
+Program inherits copies of the shell's or parent's file descriptors. Shell normally operates
+with these three file descriptors always open.
+If I/O redirection are specified on a command line, then shell ensures that the file descriptors
+suitably modified before starting the program.
+
+Standard File Descriptors: <unistd.h>
+0   Standard Input      STDIN_FILENO        stdin
+1   Standard Output     STDOUT_FILENO       stdout
+2   Standard Error      STDERR_FILENO       stderr 
+
+System calls for performing file I/O:
+-   fd = open(pathname, flags, modes)
+    opens the file identified by pathname, returning a file descriptor used to refer to the open
+    file in subsequent calls.
+    If file soesn't exist, open() may create it, depending on the settings of the flags bitmask
+    argument.
+    The flags argument also specifies whether the file is to be opened for reading, writing, both.
+    The mode argument specifies the permissions to be placed on the file if it created by this 
+    call. If the open() call is not being used to create file then this argument can be ignored.
+
+-   numread = read(fd, buffer, count)
+    Reads at mode count bytes from the open file reffred to by fd and stores them in buffer.
+    The read() call returns the number of bytes actually read. If no further bytes actually read
+    i.e. end-of-file was encountered, read returns 0.
+
+-   numwritten = write(fd, buffer, count)
+    It writes up the count bytes from buffer to the open file reffered to by fd. The write() call
+    returns the number of bytes actually written, which may be less than count.
+
+-   status = close(fd)
+    After I/O has been completed, close() is called in order to release the file descriptor fd and
+    its associated kernel resources.
+
+* Universality I/O:
+    Same four system calls - open(), read(), write() and close() - are used to perform I/O on all
+    types of files, including devices such as terminals.
+    Universality of I/O is achived by ensuring that each file system and device driver implements
+    the same set of I/O system calls.
+    When access to specific features of a file system or device is required, a program can use
+    catch all ioctl() system call, which provides an interface to features that fall outside the
+    universal I/O model.
+
+* Opening a File open():
+
+    #include <sys/stat.h>
+    #include <fcntl.h>
+    int open(const char *pathmane, int flags, ... /* mode_t mode */);
+            Returns file descriptor on success or -1 on Error
+
+    It opens an existing file or creates and opens a new file.
+
+    The file to be opened is identified by the pathname argument.
+    If pathment is a symbolic link, it is dereferenced.
+    On success, open() returns a file descriptor that is used to refer to the file in subsequent
+    system calls. If error occurs, open() returns -1 and errno is set accordingly.
+
+    The flag argument is a bit mask that specifies the access mode for the file, using one of the
+    constants.
+    File Access mode flags:
+    O_RDONLY    Open the file for reading only
+    O_WRONLY    Open the file for writing only 
+    O_RDWR      Open the file for both reading and writing
+
+    File creation flags:
+    O_CLOEXEC   Set the close-on-exec flag for new FD- flag avoids additional fcntl() operations to set 
+                close-on-exec - It closes inherited FDs on successful exec call
+    O_CREAT     Create file if it doesn't already exist - we must supply mode argument in open() call
+    O_DIRECTORY Fail if pathname is not a directory 
+    O_EXCL      With O_CREAT: create file exclusively - if file exists then open() should fail - 
+                errno set to EEXIST
+    O_LARGEFILE Used on 32-bit systems to open large files
+    O_NOCITY    Don't let pathname become the controlling terminal device
+    O_NOFOLLOW  Don't dereference symbolic links errno ELOOP - 
+    O_TRUNC     Truncate existing file to zero length - destroying existing data
+
+    Open file status flags:
+    O_APPEND    Writes are always appended to end of file
+    O_ASYNC     Generate a signal when I/O is possible - Signl driven I/Oavailable for certain
+                files sucha s terminals, FIFOs and sockets
+    O_DIRECT    File I/O bypasses buffer cache
+    O_DSYNC     Provide synchronized I/O data integrity
+    O_NOATIME   Don't update file last access time on read() - Effective user ID of calling 
+                process must match the owner of the file otherwise open() fail with EPERM.
+                It helps to write operation time to update last access time in file's i-node.
+    O_NONBLOCK  Open in nonblocking mode 
+    O_SYNC      Make file writes synchronous - Synchronous I/O
+
+    Errors from open():
+    If open() fails it returns -1 and errno identifies the cause of error.
+    EACCES - Don't allow calling process to open the file in the mode specified by flags.
+    EISDIR - If user opens directory type file for writing.
+    EMFILE - The process resource limit on the number of open file descriptors has been reached
+    ENFILE - The system-wide limit on the number of open files has been reached
+    ENOENT - Specified file doesn't exists with flag O_CREATE and pathname doesn't exists
+    EROFS  - The specified file is on read-nly FS and called opening to write it
+    ETXTBSY- The specified file is an executable file that is currently executing. It not mermitted
+            to modify currently executing program file.
+
+* Opening a File create():
+    #include <fcntl.h>
+    int creat(const char* pathname, mode_t mode);
+            // Returns file desriptor or -1 on error
+
+    fd = open(pathname, O_WRONLY | O_CREAT | O_TRUNC, mode);
+
+    creat() system call creates and opens a new file with given pathname, or if file already exists
+    opens the file and truncate it to zero length.
+
+* Reading from a file read():
+    #include <unistd.h>
+    ssize_t read(int fd, void *buffer, size_t count);
+        // Returns number of bytes read, 0 on EOF or -1 on error
+    
+    The count argument specifies the maximum number of bytes to read.
+    size_t - unsigned integer type
+    read() may read less than specified number of bytes, if EOF is is reached.
+
+* Writing to a file write():
+    #include <unistd.h>
+    ssize_t write(int fd, const void* buffer, size_t count);
+        // Returns number of bytes written or -1 on error
+    
+    When performing I/O on a disk file, a successful return from write() doesn't gurantee that the
+    data has been transferred to disk, because the kernel performs buffering of disk I/O in order
+    to reduce disk activity and expediate write() calls.
+
+* Closing a file close():
+    #include <unistd.h>
+    int close(int fd); // Returns 0 on success, or -1 on error
+
+    Attempting to close an unopened FD or close the same FD twice.
+
+* Changing the file offset lseek():
+    #include <uinstd.h>
+    off_t lssek(int fd, off_t offset, int whence);
+        // Returns new file offset if successful or -1 on error
+    off_t signed integer
+
+    For each open file, kernel records a file offset, sometimes called as read-write offset or 
+    pointer.
+    This is location in the file at which the next read() or write() will commence.
+    File offset is an ordinal byte position relative to the start of the file.
+
+    lseek() system call adjusts the file offset of the open file referred to by FD, according to 
+    values dpecified by offset and whence.
+
+    Offset argument specifies a value in byte. 
+    Whence argument indicates the base point from which offset is to interpreted.
+
+    SEEK_SET - Set offset bytes from the beginning of the file
+    SEEK_CUR - Offset is adjusted by offset bytes relative to the current file offset
+    SEEK_END - Offset is set to 'the size of the file plus offset'
+            
+    Whence is SEEK_CUR or SEEK_END, offset may be negative or positive; for SEEK_SET offsetmust
+    be nonnegative
+
+    Return value from a successful lseek()is the new file offset.
+
+    Calling lseek() simply adjusts the kernel's record of the file offset associated with the FD.
+
+    Applying lseek() to a pipi(), FIFO, socket or terminal is not permitted. eeno is et to ESPIPE.
+
+    File Holes:
+        When program seeks past the end-of-file hen call to read returns 0, indicating end-of-file.
+        It is possible to write bytes past to end of the file.
+        The space in beteen the previous end of the file and newly written bytes is referred as file hole.
+        Reading from the holes returns null characters.
+        File system doesn't allocate any disk blocks for a hole until,data can be written into it.
+
+* Operations outside the Universal I/O model ioctl():
+    #include <sys/ioctl.h>
+    int ioctl(int fd, int request, .../*argp*/);
+        // Value returned on success depends on request or -1 on error
+
+    ioctl() genral purpose mechanism for performing file and device operations that fall outside
+    the universal I/O model.
+
+ * tee()      - tee commands reads standard input and writes it to both standard output and 
+    one more files.
+           
