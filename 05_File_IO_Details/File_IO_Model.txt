@@ -1,0 +1,228 @@
+Atomicity:
+    Various system call operations are executed atomically.
+    Kernel guarantees that all of the steps in the operatio are completed without being intrupted 
+    by another process or thread.
+    Atomicity is essential to the successful completion of some operations.
+    Atomicity allows us to avoid race conditions.
+
+Ceating file exclusively
+Appending data to file  
+
+* File control operations fcntl():
+    #include <fcntl.h>
+    int fcntl(int fd, int cmd, ...);
+        Returns value on success depends on cmd, returns -1 on error
+    
+* Open file status flag
+    int flags = fcntl(fd, F_GETFL);
+
+Relationship between FD and open Files:
+    It is possible and useful to have multiple descriptors referring to the same open file.
+    These FDs may open in the same process or different processes.
+
+    * Data structures are maintained by the kernel
+        The per-process file descriptor table
+        The system-wide table of open file descriptors
+        The file system i-node table
+
+    * For each process, the kernel maintains a table of open file descriptors.
+        A set of flags controlling the operation of the file descriptor
+        A reference to the open file descriptor
+
+    * The kernel maintains a system wide table of all open file descriptions, 
+    sometimes referred as the open file table, and its entries are sometimes called as open file handles.
+
+    Open file table stores all information relating to an open file
+        The current file offset or explicitly modified using lseek()
+        status flags specified when opening the file
+        The file access mode (read-only, read-write, specified in open())
+        Setting relating to signal-driven I/O 
+        Reference to the i-node object for this file
+
+    Each file system has a table of i-nodes for all files residing in the file system.
+        The file type (regular file, socket, FIFO) and permissions
+        A pointer to a list of locks held on this file
+        Various properties of the file, including its size and timestamps relating to different types of
+        file operations.
+
+* Duplicating File Descriptors
+    
+    #include <unistd.h>
+    int dup(int oldFd); // Returns new FD on success or -1 on error
+        // Returned FD and oldFd refers to same open file description
+        // dup() assures lowest available positive integer number as returned FD
+
+    int dup2(int oldFd, int newFd)' // Returns new FD on success or -1 on error
+        // dup() assigns newFd to refer opened file description
+        // if newFd is already allcated then it closes it first and then assign newFd to refered file description
+        // if oldFd is not valid then dup2() does nothing to newFd, it fails with error EBADF
+
+    int dup3(int oldfd, int newfd, int flags);
+        // Returns new FD on success and -1 on error
+        // Similar to dup2() but adds an additional flags argumen
+    
+    $ ./myscript > result.log 2>&1
+    --> Shell redirects standard error redirected to the same place to which standatd output is being sent.
+    --> Above command sends both stderr and stdout output to result.log file
+
+    Shell redirects stndard error by making file descriptor a duplicate of file descriptor 1, 
+    so that it refers to same open file description.
+    This can be achived using dup(), dup2()
+
+    new_fd = fcntl(oldfd, F_DUPFD, startfd); // dup2() - Returns newFd which is lowest available and grater than startfd
+    new_fd = fcntl(oldfd, F_DUPFD_CLOSEXEC, startfd); //dup3()
+
+    Duplicate file descriptors share the same file offset value and status flags in theit shared
+    file desription.
+    NewFd after dup(), dup2() has its own set of flags, and its close-on-exec is turned off.
+
+* I/O at a specified offset: pread() and pwrite()
+    #include <unistd.h>
+    ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+        // returns number of bytes read, 0 on EOF or -1 on error
+        // offset is from origin of file
+
+    ssize_t pwrite(int fd, void* buf, size_t count, off_t offset);
+        // returns number of bytes written or -1 on error
+
+    * pread() is equivalent to automatically performing the following calls
+    off_t orig;
+    orig = lseek(fd, 0, SEEK_CUR); // Save curent offset
+    lseek(fd, offset, SEEK_SET);
+    s = raed(fd, buf, len);
+    lseek(fd, orig, SEEK_SET); // Restore original fle offset
+
+    For both pread() and pwrite(), the file reffered by fd must be seekable.
+    
+    These system calls are useful in multithreaded applications.
+    File offset for each open file is global to all threads. Using pread() and pwrite(), multiple threads
+    can perform I/O.
+
+    Cost of single pread() and pwrite() is less than lsssek() + read() or write().
+
+* Scatter-gather I/O: readv() and writev()
+    #include <sys/uio.h>
+    ssize_t readv(int fd, const struct iovec* iov, int iovcnt);
+        // Returnes number of bytes read, 0 on EOF or -1 on error
+    ssize_t writev();
+        // Returns number of bytes written or -1 on error
+    
+    Instead of accepting a single buffer of data to be read or written, these functions trnsfer multiple
+    buffers of data in single system call.
+
+    struct iovec
+    {
+        void *iov_base; // Start address of buffer
+        size_t iov_len; // Number of bytes to transfer to/from buffer
+    };
+
+    * Scatter input:
+        readv() system call performs scatter input.
+        It reads a contiguous sequence of bytes from the file reffered to by the file descriptor fd and places
+        these bytes into the buffers specified by iov.
+        Each of the buffers, starting with one defined by iov[0], is completely filled before readv() proceed
+        to next buffer.
+        It is importan property of readv() is that it complets atomically.
+        From point of view of calling process, the kernel performs a single data transfer between file referred
+        to by fd and user memory.
+        The called must examine count to verify whether all requested bytes were read. 
+        If insufficent data was available, then only some buffers may have filled, and lst of these may be only
+        partially filled.
+
+    * scatter outpu:
+        write() performs gather output.
+        It concatnates data from all of the buffers specified by iov and writes them as sequence of contiguous
+        bytes of the file reffered to by the file descriptor fd.
+        writev() performs operation atomically.
+        writev() may perform partial writing, so need to examine number of written bytes.
+
+        write() and read() are not atomic in operation.
+        writev() and readv() are efficient.
+
+    * Performing scatter-gather I/O at a specified offset
+        #include <sys/uio.h>
+        ssize_t preadv(int fd, const struct iovec* iov, int iovcnt, off_t offset);
+            // Returnsnumber of bytes read, 0 on EOF or -1 on error
+        ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset);
+            // Returnsnumber of bytes written, 0 on EOF or -1 on error        
+
+        Perform the same task readv() and writev(), but perform th eI/O at the file location specified by offset.
+        The system calls don't change the file offset.
+
+* Truncating a file: truncate() and ftruncate()
+    #include <unistd.h>
+    int truncate(const char* pathname, off_t length);
+    int ftruncate(int fd, off_t length);
+        // Both returns on 0 on success or -1 on error
+
+    If the file longer than length, the excess data is lost.
+    If file is shorter than length, it is extended by padding with a sequence of null bytes or a hole.
+
+    truncate() system call is unique in being the only system call that can change the contents of file
+    without first obtaining a descriptor for the file via open()
+
+* Non-blocking I/O:
+    O_NONBLOCK flag is specified if
+    1) The file can't be opened immediately, then open() returns an error instead of blocking. 
+    One case where open() can block is with FIFOs.
+
+    2) After succesful open(), subsequently I/O operations are non-blocking. 
+    If an I/O system calls can't complete immediately, then either a partial data transfer is performed or
+    system call fails with one of the error EAGAIN or EWOULDBLOCK.
+
+    Nonblocking mode can be used with devices, pipes, FIFOs, sockets.
+    We must enable this flag using fcntl() F_SETFL operation.
+
+    O_NONBLOCK is generally ignored for regulat files, kernel buffer cache ensures that I/O on regular
+    files does not block. 
+    O_NONBLOCK has an effect for regular files when mandatory file locking is employed.
+
+* dev/fd directory:
+    For each process, kernel provides the special virtual directory /dev/fd.
+    This directory contains filesna,es of the form /dev/fd/n, where n is number corresponds to one of the open file descriptor
+    for the process.
+    Opening /dev/fd/n file equivalent to reopening the original file.
+
+* Creating temporary files:
+    
+    #include <stdlib.h>
+    int mkstemp(char *template);
+        // Returns FD on success or -1 on error
+    It generates unique filename based on template supplied by caller and open the file, returning a FD
+    that can be used with I/O sytem cal;ls.
+
+    FILE *tmpfile(void); //Returns file descriptor on success or NULL on error
+
+    Some program need to create temporay files that are used onlt while the program is running, these
+    files should be removed when the program teminates.
+
+    Many compilers create temporary files during the compilation process.
+
+    The template argument takes the form of a pathname in which last 6 characters must be XXXXXX.
+    These 6 characters are replaced with a string that makes the filename unique.
+
+    #include <stdio.h>
+    FILE *tmpfile(void); // REturns file pointer on success or NULL on error
+        // REturns file pointer on success or NULL on error
+
+    tmpfile() returns a file stream that can be used with stdio library functions.
+
+* I/O on Large Files:
+    The off_t data tpe used to hold a file offset is typically implemented as signed long integer.
+    A signed data type is required because -1 is required for representing an error condition.
+    This limits file size to 2 GB.
+    On 32-bit linux system need arises to handle files greater than 2 GB.
+
+    - Use alternate API that supports large files. 
+    - Define _FILE_OFFSET_BITS macro with value 64 when compiling our programs.
+     This allows conforming application to obtain LFS functionality without making any source changes.
+
+    The transitional LFS API:
+        fopen64(), open64(), lseek64(), truncate64(), stat64(), mmap64() and setrlimit64()
+
+    The _FILE_OFFSET_BITS macro:
+        Set this macro to 64, so that all 32-bit relevant functions are converted to 64-bit format functions
+        automatically.
+        off_t data type is defined as 64 bit format.
+
+        $ gcc -D_FILE_OFFSET_BITS=64 prog.cache
